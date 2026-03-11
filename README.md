@@ -43,6 +43,12 @@ func main() {
 
 ### Converting Multiple Images to 1 PDF
 
+You can control how images are placed on the page using `ImageFitMode`. Supported modes:
+- `fit` (default): Scale to fit within margins, maintain aspect ratio, centered.
+- `stretch`: Fill the printable area, ignoring aspect ratio.
+- `center`: Original size, centered (scales down if larger than page).
+- `original`: Original size, placed at top-left.
+
 ```go
 package main
 
@@ -53,6 +59,7 @@ import (
 
 func main() {
     converter := office_to_pdf.NewConverter("", "")
+    converter.ImageFitMode = "center"
 
     images := []string{"page1.jpg", "page2.png", "page3.jpg"}
     err := converter.ConvertImagesToPdf(images, "combined.pdf")
@@ -89,8 +96,8 @@ You can also use the included CLI tool:
 ```bash
 go build -o convert cmd/convert/main.go
 
-# Convert multiple images
-./convert -output combined.pdf photo1.jpg photo2.png photo3.jpg
+# Convert multiple images with a specific layout mode
+./convert -img-mode=stretch -output combined.pdf photo1.jpg photo2.png
 
 # Convert single files
 ./convert data.xlsx

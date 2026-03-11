@@ -3,6 +3,10 @@ package office_to_pdf
 import (
 	"embed"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
+	"os"
 
 	"github.com/ryugenxd/docx2pdf"
 	"github.com/signintech/gopdf"
@@ -16,15 +20,23 @@ const defaultFontName = "fonts/arial.ttf"
 
 // Converter provides methods to convert Office documents and images to PDF using pure Go.
 type Converter struct {
-	FontPath   string // Path to a TTF font file
-	FontFamily string // Font family name to use in PDF
+	FontPath     string // Path to a TTF font file
+	FontFamily   string // Font family name to use in PDF
+	// ImageFitMode determines how images are placed on the PDF page.
+	// Supported modes:
+	// - "fit" (default): Scaled to fit within the page margins while maintaining aspect ratio, centered.
+	// - "stretch": Scaled to fill the entire page within margins, ignoring aspect ratio.
+	// - "center": Original size, centered on the page. If larger than the page, it scales down to fit.
+	// - "original": Original size, placed at the top-left corner.
+	ImageFitMode string
 }
 
 // NewConverter returns a new Converter with optional font settings.
 func NewConverter(fontPath, fontFamily string) *Converter {
 	return &Converter{
-		FontPath:   fontPath,
-		FontFamily: fontFamily,
+		FontPath:     fontPath,
+		FontFamily:   fontFamily,
+		ImageFitMode: "fit",
 	}
 }
 
@@ -151,10 +163,65 @@ func (c *Converter) ConvertImagesToPdf(inputPaths []string, outputPath string) e
 	for _, inputPath := range inputPaths {
 		pdf.AddPage()
 
+		var rect *gopdf.Rect
+		x := margin
+		y := margin
+
+		var imgW, imgH float64
+		file, err := os.Open(inputPath)
+		if err == nil {
+			config, _, errConfig := image.DecodeConfig(file)
+			file.Close()
+			if errConfig == nil {
+				// Assuming standard 96 DPI, 1 pixel is approx 0.75 PDF points (72 points per inch)
+				imgW = float64(config.Width) * 0.75
+				imgH = float64(config.Height) * 0.75
+			}
+		}
+
+		mode := c.ImageFitMode
+		if mode == "" {
+			mode = "fit"
+		}
+
+		if mode == "stretch" || (imgW == 0 && imgH == 0) {
+			rect = &gopdf.Rect{W: targetW, H: targetH}
+		} else {
+			switch mode {
+			case "fit":
+				ratio := imgW / imgH
+				pageRatio := targetW / targetH
+				if ratio > pageRatio {
+					rect = &gopdf.Rect{W: targetW, H: targetW / ratio}
+				} else {
+					rect = &gopdf.Rect{W: targetH * ratio, H: targetH}
+				}
+				x = margin + (targetW-rect.W)/2
+				y = margin + (targetH-rect.H)/2
+			case "center":
+				if imgW > targetW || imgH > targetH {
+					// Scale down if it exceeds margins
+					ratio := imgW / imgH
+					pageRatio := targetW / targetH
+					if ratio > pageRatio {
+						rect = &gopdf.Rect{W: targetW, H: targetW / ratio}
+					} else {
+						rect = &gopdf.Rect{W: targetH * ratio, H: targetH}
+					}
+				} else {
+					rect = &gopdf.Rect{W: imgW, H: imgH}
+				}
+				x = margin + (targetW-rect.W)/2
+				y = margin + (targetH-rect.H)/2
+			case "original":
+				rect = &gopdf.Rect{W: imgW, H: imgH}
+			}
+		}
+
 		// gopdf.Image automatically scales if a rect is provided.
-		err := pdf.Image(inputPath, margin, margin, &gopdf.Rect{W: targetW, H: targetH})
+		err = pdf.Image(inputPath, x, y, rect)
 		if err != nil {
-			// If scaling fails, try natural size
+			// If scaled image fails, try basic fallback
 			err = pdf.Image(inputPath, margin, margin, nil)
 			if err != nil {
 				return fmt.Errorf("failed to add image %s to pdf: %w", inputPath, err)

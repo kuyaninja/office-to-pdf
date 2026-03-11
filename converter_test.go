@@ -54,21 +54,26 @@ func TestConvertDocxToPdf(t *testing.T) {
 func TestConvertImageToPdf(t *testing.T) {
 	tmpDir := t.TempDir()
 	imgPath := filepath.Join(tmpDir, "test.png")
-	pdfPath := filepath.Join(tmpDir, "test.pdf")
 
 	// 1. Create a dummy image
-	createDummyImage(t, imgPath)
+	createDummyImage(t, imgPath, 100, 100)
 
-	// 2. Convert to PDF
-	converter := NewConverter("", "")
-	err := converter.ConvertImageToPdf(imgPath, pdfPath)
-	if err != nil {
-		t.Errorf("ConvertImageToPdf failed: %v", err)
-	}
+	modes := []string{"fit", "stretch", "center", "original"}
 
-	// 3. Verify PDF was created
-	if _, err := os.Stat(pdfPath); os.IsNotExist(err) {
-		t.Error("output PDF file was not created")
+	for _, mode := range modes {
+		t.Run("Mode_"+mode, func(t *testing.T) {
+			pdfPath := filepath.Join(tmpDir, "test_"+mode+".pdf")
+			converter := NewConverter("", "")
+			converter.ImageFitMode = mode
+			err := converter.ConvertImageToPdf(imgPath, pdfPath)
+			if err != nil {
+				t.Errorf("ConvertImageToPdf failed with mode %s: %v", mode, err)
+			}
+
+			if _, err := os.Stat(pdfPath); os.IsNotExist(err) {
+				t.Errorf("output PDF file was not created for mode %s", mode)
+			}
+		})
 	}
 }
 
@@ -78,27 +83,26 @@ func TestConvertImagesToPdf(t *testing.T) {
 	img2 := filepath.Join(tmpDir, "test2.png")
 	pdfPath := filepath.Join(tmpDir, "test.pdf")
 
-	// 1. Create two dummy images
-	createDummyImage(t, img1)
-	createDummyImage(t, img2)
+	// Create one small and one large image
+	createDummyImage(t, img1, 100, 100)
+	createDummyImage(t, img2, 1000, 1500) // Exceeds A4
 
-	// 2. Convert multiple to one PDF
 	converter := NewConverter("", "")
+	converter.ImageFitMode = "center"
 	err := converter.ConvertImagesToPdf([]string{img1, img2}, pdfPath)
 	if err != nil {
 		t.Errorf("ConvertImagesToPdf failed: %v", err)
 	}
 
-	// 3. Verify PDF was created
 	if _, err := os.Stat(pdfPath); os.IsNotExist(err) {
 		t.Error("output PDF file was not created")
 	}
 }
 
-func createDummyImage(t *testing.T, path string) {
-	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
-	for y := 0; y < 100; y++ {
-		for x := 0; x < 100; x++ {
+func createDummyImage(t *testing.T, path string, w, h int) {
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
 			img.Set(x, y, color.RGBA{255, 0, 0, 255})
 		}
 	}
