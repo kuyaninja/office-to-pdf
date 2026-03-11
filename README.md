@@ -97,6 +97,5 @@ go build -o convert cmd/convert/main.go
 ./convert document.docx
 ```
 
-## Limitations
-- **Layout Fidelity**: As this is a pure Go solution, extremely complex layouts or advanced Office features (like Word shapes or complex Excel charts) may not be perfectly preserved.
-- **Font Support**: While it includes a default font, proper rendering of non-Latin characters (CJK, etc.) requires providing a TTF font that supports those characters via `NewConverter("/path/to/font.ttf", "FontName")`.
+## License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
