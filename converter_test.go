@@ -15,7 +15,6 @@ func TestConvertXlsxToPdf(t *testing.T) {
 	// 1. Create a temporary Excel file for testing
 	tmpDir := t.TempDir()
 	xlsxPath := filepath.Join(tmpDir, "test.xlsx")
-	pdfPath := filepath.Join(tmpDir, "test.pdf")
 
 	f := excelize.NewFile()
 	sheet := "Sheet1"
@@ -25,16 +24,22 @@ func TestConvertXlsxToPdf(t *testing.T) {
 		t.Fatalf("failed to create test xlsx: %v", err)
 	}
 
-	// 2. Initialize converter (using embedded font) and run conversion
-	converter := NewConverter("", "Arial")
-	err := converter.ConvertXlsxToPdf(xlsxPath, pdfPath)
-	if err != nil {
-		t.Errorf("ConvertXlsxToPdf failed: %v", err)
-	}
+	modes := []string{"portrait", "landscape", "auto"}
 
-	// 3. Verify PDF was created
-	if _, err := os.Stat(pdfPath); os.IsNotExist(err) {
-		t.Error("output PDF file was not created")
+	for _, mode := range modes {
+		t.Run("Orientation_"+mode, func(t *testing.T) {
+			pdfPath := filepath.Join(tmpDir, "test_"+mode+".pdf")
+			converter := NewConverter("", "Arial")
+			converter.Orientation = mode
+			err := converter.ConvertXlsxToPdf(xlsxPath, pdfPath)
+			if err != nil {
+				t.Errorf("ConvertXlsxToPdf failed with orientation %s: %v", mode, err)
+			}
+
+			if _, err := os.Stat(pdfPath); os.IsNotExist(err) {
+				t.Errorf("output PDF file was not created for orientation %s", mode)
+			}
+		})
 	}
 }
 

@@ -29,6 +29,12 @@ type Converter struct {
 	// - "center": Original size, centered on the page. If larger than the page, it scales down to fit.
 	// - "original": Original size, placed at the top-left corner.
 	ImageFitMode string
+	// Orientation determines the page orientation for PDF conversion (Excel and Images).
+	// Supported modes:
+	// - "portrait" (default): Standard vertical orientation.
+	// - "landscape": Horizontal orientation.
+	// - "auto": Determines orientation automatically based on content (Excel columns or Image aspect ratio).
+	Orientation  string
 }
 
 // NewConverter returns a new Converter with optional font settings.
@@ -37,6 +43,7 @@ func NewConverter(fontPath, fontFamily string) *Converter {
 		FontPath:     fontPath,
 		FontFamily:   fontFamily,
 		ImageFitMode: "fit",
+		Orientation:  "portrait",
 	}
 }
 
@@ -79,9 +86,6 @@ func (c *Converter) ConvertXlsxToPdf(inputPath, outputPath string) error {
 	}
 
 	for _, sheetName := range f.GetSheetList() {
-		pdf.AddPage()
-		pdf.SetFont(family, "", 10)
-
 		rows, err := f.GetRows(sheetName)
 		if err != nil {
 			continue
@@ -101,14 +105,41 @@ func (c *Converter) ConvertXlsxToPdf(inputPath, outputPath string) error {
 			}
 		}
 
+		totalWidth := 0.0
+		for _, w := range colWidths {
+			if w < 60 {
+				w = 60
+			}
+			totalWidth += w
+		}
+
+		isLandscape := false
+		if c.Orientation == "landscape" {
+			isLandscape = true
+		} else if c.Orientation == "auto" {
+			if totalWidth+60 > 595.28 { // 60 for left+right margins
+				isLandscape = true
+			}
+		}
+
+		pageOpt := gopdf.PageOption{PageSize: gopdf.PageSizeA4}
+		pageLimitY := 800.0
+		if isLandscape {
+			pageOpt.PageSize = &gopdf.Rect{W: 841.89, H: 595.28}
+			pageLimitY = 550.0 // Adjusted for landscape height
+		}
+
+		pdf.AddPageWithOption(pageOpt)
+		pdf.SetFont(family, "", 10)
+
 		y := 30.0
 		for _, row := range rows {
 			x := 30.0
 			rowHeight := 20.0
 			
 			// Check for page break
-			if y + rowHeight > 800 {
-				pdf.AddPage()
+			if y + rowHeight > pageLimitY {
+				pdf.AddPageWithOption(pageOpt)
 				y = 30.0
 			}
 
@@ -154,19 +185,9 @@ func (c *Converter) ConvertImagesToPdf(inputPaths []string, outputPath string) e
 	pdf := &gopdf.GoPdf{}
 	pdf.Start(gopdf.Config{PageSize: *gopdf.PageSizeA4})
 
-	pageW := gopdf.PageSizeA4.W
-	pageH := gopdf.PageSizeA4.H
 	margin := 20.0
-	targetW := pageW - (margin * 2)
-	targetH := pageH - (margin * 2)
 
 	for _, inputPath := range inputPaths {
-		pdf.AddPage()
-
-		var rect *gopdf.Rect
-		x := margin
-		y := margin
-
 		var imgW, imgH float64
 		file, err := os.Open(inputPath)
 		if err == nil {
@@ -178,6 +199,34 @@ func (c *Converter) ConvertImagesToPdf(inputPaths []string, outputPath string) e
 				imgH = float64(config.Height) * 0.75
 			}
 		}
+
+		isLandscape := false
+		if c.Orientation == "landscape" {
+			isLandscape = true
+		} else if c.Orientation == "auto" {
+			if imgW > imgH {
+				isLandscape = true
+			}
+		}
+
+		pageOpt := gopdf.PageOption{PageSize: gopdf.PageSizeA4}
+		pageW := gopdf.PageSizeA4.W
+		pageH := gopdf.PageSizeA4.H
+		
+		if isLandscape {
+			pageW = 841.89
+			pageH = 595.28
+			pageOpt.PageSize = &gopdf.Rect{W: pageW, H: pageH}
+		}
+		
+		pdf.AddPageWithOption(pageOpt)
+
+		targetW := pageW - (margin * 2)
+		targetH := pageH - (margin * 2)
+
+		var rect *gopdf.Rect
+		x := margin
+		y := margin
 
 		mode := c.ImageFitMode
 		if mode == "" {

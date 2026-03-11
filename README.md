@@ -49,6 +49,8 @@ You can control how images are placed on the page using `ImageFitMode`. Supporte
 - `center`: Original size, centered (scales down if larger than page).
 - `original`: Original size, placed at top-left.
 
+You can also use the `Orientation` option (portrait, landscape, auto) which applies to both Excel and Image conversions.
+
 ```go
 package main
 
@@ -60,6 +62,7 @@ import (
 func main() {
     converter := office_to_pdf.NewConverter("", "")
     converter.ImageFitMode = "center"
+    converter.Orientation = "auto" // will make wide images horizontal
 
     images := []string{"page1.jpg", "page2.png", "page3.jpg"}
     err := converter.ConvertImagesToPdf(images, "combined.pdf")
